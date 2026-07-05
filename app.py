@@ -1,5 +1,6 @@
 import streamlit as st
 import joblib
+import pickle
 
 # -----------------------------
 # Streamlit Page Configuration
@@ -14,46 +15,48 @@ st.set_page_config(
 # Load Model & Vectorizer
 # -----------------------------
 @st.cache_resource
-def load_model():
-    model = joblib.load("fraud_model.pkl")
-    vectorizer = joblib.load("tfidf_vectorizer.pkl")
+def load_files():
+    try:
+        model = joblib.load("fraud_model.pkl")
+    except:
+        with open("fraud_model.pkl", "rb") as f:
+            model = pickle.load(f)
+
+    try:
+        vectorizer = joblib.load("tfidf_vectorizer.pkl")
+    except:
+        with open("tfidf_vectorizer.pkl", "rb") as f:
+            vectorizer = pickle.load(f)
+
     return model, vectorizer
 
 try:
-    model, vectorizer = load_model()
+    model, vectorizer = load_files()
 except Exception as e:
-    st.error("❌ Failed to load the ML model.")
+    st.error("Failed to load model or vectorizer.")
     st.exception(e)
     st.stop()
 
 # -----------------------------
-# Title
+# UI
 # -----------------------------
 st.title("🛡️ Myth Buster")
 st.subheader("Fake / Fraud Message Detection")
 
 st.write(
-    "Paste an SMS or message below. The trained Machine Learning model "
-    "will classify it as **Legitimate** or **Fraud/Spam**."
+    "Paste an SMS or message below to check whether it is "
+    "**Fraud/Spam** or **Legitimate**."
 )
 
-st.divider()
-
-# -----------------------------
-# User Input
-# -----------------------------
 message = st.text_area(
     "Enter Message",
-    height=200,
-    placeholder="Example: Congratulations! You have won ₹50,000..."
+    height=180,
+    placeholder="Congratulations! You have won ₹50,000..."
 )
 
-# -----------------------------
-# Predict
-# -----------------------------
-if st.button("🔍 Analyze Message"):
+if st.button("Analyze Message"):
 
-    if not message.strip():
+    if message.strip() == "":
         st.warning("Please enter a message.")
         st.stop()
 
@@ -61,20 +64,20 @@ if st.button("🔍 Analyze Message"):
 
     prediction = model.predict(vector)[0]
 
-    confidence = model.predict_proba(vector)[0][prediction] * 100
-
     st.divider()
 
     st.subheader("Prediction")
 
+    # Change this if your labels are reversed
     if prediction == 1:
         st.error("🚨 Fraud / Spam Message")
     else:
         st.success("✅ Legitimate Message")
 
-    st.metric("Confidence", f"{confidence:.2f}%")
+    if hasattr(model, "predict_proba"):
+        confidence = model.predict_proba(vector).max() * 100
+        st.metric("Confidence", f"{confidence:.2f}%")
+        st.progress(int(confidence))
 
-    st.progress(int(confidence))
-
-    st.subheader("Entered Message")
+    st.subheader("Message")
     st.info(message)
